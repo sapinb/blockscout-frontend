@@ -161,7 +161,7 @@ const BlockDetails = ({ query }: Props) => {
         isLoading={ isPlaceholderData }
       >
         <Skeleton isLoaded={ !isPlaceholderData }>
-          { data.size.toLocaleString() }
+          { data.size?.toLocaleString() }
         </Skeleton>
       </DetailsInfoItem>
       <DetailsInfoItem

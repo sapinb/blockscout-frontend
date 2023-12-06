@@ -63,7 +63,7 @@ const BlocksTableItem = ({ data, isLoading, enableTimeIncrement }: Props) => {
       </Td>
       <Td fontSize="sm">
         <Skeleton isLoaded={ !isLoading } display="inline-block">
-          { data.size.toLocaleString() }
+          { data.size?.toLocaleString() }
         </Skeleton>
       </Td>
       <Td fontSize="sm">

@@ -54,7 +54,7 @@ const BlocksListItem = ({ data, isLoading, enableTimeIncrement }: Props) => {
       <Flex columnGap={ 2 }>
         <Text fontWeight={ 500 }>Size</Text>
         <Skeleton isLoaded={ !isLoading } display="inline-block" color="text_secondary">
-          <span>{ data.size.toLocaleString() } bytes</span>
+          <span>{ data.size?.toLocaleString() } bytes</span>
         </Skeleton>
       </Flex>
       <Flex columnGap={ 2 } w="100%">
