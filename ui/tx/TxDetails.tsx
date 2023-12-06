@@ -22,6 +22,7 @@ import { ZKEVM_L2_TX_STATUSES } from 'types/api/transaction';
 import { route } from 'nextjs-routes';
 
 import config from 'configs/app';
+import { getEnvValue } from 'configs/app/utils';
 import clockIcon from 'icons/clock.svg';
 import flameIcon from 'icons/flame.svg';
 import errorIcon from 'icons/status/error.svg';
@@ -60,10 +61,88 @@ import TxAllowedPeekers from 'ui/tx/TxAllowedPeekers';
 import TxSocketAlert from 'ui/tx/TxSocketAlert';
 import useFetchTxInfo from 'ui/tx/useFetchTxInfo';
 
+const TRANSACTION_STATUSES = {
+  FETCHING: 'FETCHING',
+  UNPUBLISHED: 'Unpublished',
+  PENDING_CONFIRMATION: 'Pending Confirmation',
+  CONFIRMED: 'Confirmed',
+  FINALIZED: 'Finalized',
+  NOT_FOUND: 'NOT FOUND',
+} as const;
+
+type TxnStatus = keyof typeof TRANSACTION_STATUSES;
+
+const isTxnStatus = (maybeTxnStatus: unknown): maybeTxnStatus is TxnStatus => {
+  return Object.keys(TRANSACTION_STATUSES).includes(maybeTxnStatus as string);
+};
+
+const txnDetailSteps = [
+  TRANSACTION_STATUSES.PENDING_CONFIRMATION,
+  TRANSACTION_STATUSES.CONFIRMED,
+  TRANSACTION_STATUSES.FINALIZED,
+];
+
+const fetchTxStatus = async(txHash: string): Promise<TxnStatus> => {
+  const rpcUrl = getEnvValue('NEXT_PUBLIC_ALP_RPC_URL');
+
+  if (!rpcUrl) {
+    throw new Error('NEXT_PUBLIC_ALP_RPC_URL is missing');
+  }
+
+  const response = await fetch(rpcUrl, {
+    method: 'POST',
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      method: 'alp_getTransactionStatus',
+      params: [ txHash ],
+      id: 1,
+    }),
+    headers: {
+      'Content-type': 'application/json',
+    },
+  });
+
+  if (response.ok) {
+    const body = await response.json();
+    const status = (body as Record<string, string>)?.result?.[0];
+
+    if (isTxnStatus(status)) {
+      return status;
+    }
+
+    return 'NOT_FOUND';
+  }
+
+  return 'NOT_FOUND';
+};
+
 const TxDetails = () => {
   const { data, isPlaceholderData, isError, socketStatus, error } = useFetchTxInfo();
 
   const [ isExpanded, setIsExpanded ] = React.useState(false);
+
+  const [ txnDetailStatus, setTxnDetailStatus ] = React.useState<TxnStatus>('FETCHING');
+
+  const txHash = data?.hash;
+  React.useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    const fetchStatus = async() => {
+      if (!txHash) {
+        return;
+      }
+      const txStatus = await fetchTxStatus(txHash);
+
+      setTxnDetailStatus(txStatus);
+
+      timer = setTimeout(fetchStatus, 1000);
+    };
+
+    if (txnDetailStatus !== 'FINALIZED') {
+      timer = setTimeout(fetchStatus, 1000);
+    }
+
+    return () => clearTimeout(timer);
+  }, [ txHash, txnDetailStatus ]);
 
   const handleCutClick = React.useCallback(() => {
     setIsExpanded((flag) => !flag);
@@ -161,6 +240,20 @@ const TxDetails = () => {
           status={ data.op_withdrawal_status }
           l1TxHash={ data.op_l1_transaction_hash }
         />
+        <DetailsInfoItem
+          title="Confirmation status"
+          hint="Status of the transaction confirmation path to L1"
+          isLoading={ isPlaceholderData }
+        >
+          { txnDetailSteps.includes(TRANSACTION_STATUSES[txnDetailStatus]) ? (
+            <VerificationSteps currentStep={ TRANSACTION_STATUSES[txnDetailStatus] } steps={ txnDetailSteps } isLoading={ isPlaceholderData }/>
+          ) : (
+            <Tag colorScheme={ txnDetailStatus === 'NOT_FOUND' ? 'red' : 'gray' } isLoading={ isPlaceholderData } isTruncated ml={ 3 }>
+              { TRANSACTION_STATUSES[txnDetailStatus] }
+            </Tag>
+          ) }
+        </DetailsInfoItem>
+
         { data.zkevm_status && (
           <DetailsInfoItem
             title="Confirmation status"
